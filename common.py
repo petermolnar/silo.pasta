@@ -5,6 +5,7 @@ import re
 import logging
 import shutil
 import subprocess
+import lxml.etree as etree
 from slugify import slugify
 import requests
 import arrow
@@ -21,9 +22,47 @@ def slugfname(url):
     )[:200]
 
 
+class Follows(object):
+    def __init__(self):
+        self.feeds = {}
+
+    def append(self, silo, feeds):
+        self.feeds.update({silo: feeds})
+
+    def export(self):
+        opml = etree.Element("opml")
+
+        head = etree.SubElement(opml, "head")
+        title = etree.SubElement(head, "title").text = "Social media RSS feeds"
+
+        body = etree.SubElement(opml, "body")
+        for silo, feeds in self.feeds.items():
+            s = etree.SubElement(body, "outline", text=silo)
+            for f in feeds:
+                entry = etree.SubElement(
+                    s,
+                    "outline",
+                    type="rss",
+                    text=f.get('text'),
+                    xmlUrl=f.get('xmlUrl'),
+                    htmlUrl=f.get('htmlUrl')
+                )
+
+        opmlfile = os.path.join(
+            settings.paths.get('archive'),
+            'feeds.opml'
+        )
+
+        with open(opmlfile, 'wb') as f:
+            f.write(etree.tostring(opml, pretty_print=True))
+
 class Favs(object):
     def __init__(self, silo):
         self.silo = silo
+
+    @property
+    def feeds(self):
+        return []
 
     @property
     def since(self):

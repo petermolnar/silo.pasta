@@ -1,5 +1,6 @@
 import os
 import glob
+import logging
 import pytumblr
 import arrow
 import keys
@@ -19,15 +20,44 @@ class TumblrFavs(common.Favs):
             keys.tumblr.get('oauth_secret')
         )
 
+    @property
+    def feeds(self):
+        logging.info('Generating OPML feeds for Tumblr')
+        feeds = []
+        offset = 0
+        has_more = True
+        while has_more:
+            fetched = self.client.following(offset=offset)
+            if '_links' in fetched and 'next' in fetched['_links'] and len(fetched):
+                offset = fetched.get('_links').get('next').get('query_params').get('offset')
+            else:
+                has_more = False
+
+            for u in fetched.get('blogs'):
+                feeds.append({
+                    'text': u.get('name'),
+                    'xmlUrl': "%srss" % u.get('url'),
+                    'htmlUrl': u.get('url')
+                })
+        return feeds
+
     def run(self):
-        likes = self.client.likes(after=self.since)
-        if 'liked_posts' not in likes:
-            return
+        has_more = True
+        after = 0
+        while has_more:
+            logging.info('fetching for Tumblr: after %d' % after)
+            fetched = self.client.likes(after=after)
+            if 'liked_posts' not in fetched:
+                has_more = False
+            elif '_links' in fetched and 'prev' in fetched['_links'] and len(fetched):
+                after = fetched.get('_links').get('prev').get('query_params').get('after')
+                after = int(after)
+            else:
+                has_more = False
 
-        for like in likes.get('liked_posts'):
-            fav = TumblrFav(like)
-
-            fav.run()
+            for like in fetched.get('liked_posts'):
+                fav = TumblrFav(like)
+                fav.run()
 
 
 class TumblrFav(common.ImgFav):
@@ -102,7 +132,7 @@ class TumblrFav(common.ImgFav):
         r = {}
         cntr = 0
         for p in self.data.get('photos', []):
-            f = "%s-%d%s" % (self.targetprefix, cntr, common.TMPFEXT)
+            f = "%s_%d%s" % (self.targetprefix, cntr, common.TMPFEXT)
             r.update({
                 f: p.get('original_size').get('url')
             })

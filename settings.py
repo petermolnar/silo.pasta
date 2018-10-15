@@ -20,7 +20,7 @@ loglevels = {
 _parser = argparse.ArgumentParser(description='Parameters for silo.pasta')
 _parser.add_argument(
     '--loglevel',
-    default='info',
+    default='debug',
     help='change loglevel'
 )
 

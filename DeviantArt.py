@@ -19,9 +19,37 @@ class DAFavs(common.Favs):
         )
         self.favfolder = None
 
+    @property
+    def feeds(self):
+        logging.info('Generating OPML feeds for DeviantArt')
+        feeds = []
+        offset = 0
+        has_more = True
+        while has_more:
+            logging.info('Generating OPML feeds for DeviantArt: offset %d' % offset)
+            try:
+                following = self.client.get_friends(
+                    username=keys.deviantart.get('username'),
+                    offset=offset
+                )
+                offset = following.get('next_offset')
+                for follow in following.get('results'):
+                    u = follow.get('user').username.lower()
+                    feeds.append({
+                        'text': u,
+                        'xmlUrl': "https://backend.deviantart.com/rss.xml?q=gallery%%3A%s" % u,
+                        'htmlUrl': "https://www.deviantart.com/%s" % u
+                    })
+                has_more = following.get('has_more')
+            except deviantart.api.DeviantartError as e:
+                print(e)
+                break
+        return feeds
+
     def run(self):
         offset = 0
         while not self.favfolder:
+            logging.info('fetching for DeviantArt: offset %d' % offset)
             try:
                 folders = self.client.get_collections(
                     username=keys.deviantart.get('username'),

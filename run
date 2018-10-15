@@ -3,7 +3,4 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-python3 Tumblr.py
-python3 LastFM.py
-python3 DeviantArt.py
-python3 Flickr.py
+python3 run.py
