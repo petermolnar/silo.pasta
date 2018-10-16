@@ -43,7 +43,7 @@ class TumblrFavs(common.Favs):
 
     def run(self):
         has_more = True
-        after = 0
+        after = self.since
         while has_more:
             logging.info('fetching for Tumblr: after %d' % after)
             fetched = self.client.likes(after=after)

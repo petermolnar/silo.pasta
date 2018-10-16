@@ -21,6 +21,22 @@ def slugfname(url):
         lower=True
     )[:200]
 
+class cached_property(object):
+    """ extermely simple cached_property decorator:
+    whenever something is called as @cached_property, on first run, the
+    result is calculated, then the class method is overwritten to be
+    a property, contaning the result from the method
+    """
+    def __init__(self, method, name=None):
+        self.method = method
+        self.name = name or method.__name__
+    def __get__(self, inst, cls):
+        if inst is None:
+            return self
+        result = self.method(inst)
+        setattr(inst, self.name, result)
+        return result
+
 
 class Follows(object):
     def __init__(self):
@@ -66,21 +82,16 @@ class Favs(object):
 
     @property
     def since(self):
-        mtime = 0
         d = os.path.join(
             settings.paths.get('archive'),
             'favorite',
-            "%s-*" % self.silo
+            "%s*" % self.silo
         )
         files = glob.glob(d)
-
-        if (len(files)):
-            for f in files:
-                ftime = int(os.path.getmtime(f))
-                if ftime > mtime:
-                    mtime = ftime
-        # TODO why is this here?
-        mtime = mtime + 1
+        if len(files):
+            mtime = max([int(os.path.getmtime(f)) for f in files])
+        else:
+            mtime = 0
         return mtime
 
 

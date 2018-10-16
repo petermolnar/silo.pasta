@@ -50,7 +50,8 @@ class FlickrFavs(common.Favs):
             logging.info('fetching for Flickr: page %d' % page)
             fetched = self.user.getFavorites(
                 user_id=self.user.id,
-                page=page
+                page=page,
+                min_fave_date=self.since
             )
             for p in fetched:
                 photo = FlickrFav(p)
@@ -62,11 +63,19 @@ class FlickrFavs(common.Favs):
 class FlickrFav(common.ImgFav):
     def __init__(self, flickrphoto):
         self.flickrphoto = flickrphoto
-        self.info = flickrphoto.getInfo()
-        self.owner = self.info.get('owner')
 
     def __str__(self):
         return "fav-of %s" % (self.url)
+
+    @property
+    @common.cached_property
+    def owner(self):
+        return self.info.get('owner')
+
+    @property
+    @common.cached_property
+    def info(self):
+        return flickrphoto.getInfo()
 
     @property
     def author(self):

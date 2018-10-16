@@ -30,7 +30,8 @@ class DAFavs(common.Favs):
             try:
                 following = self.client.get_friends(
                     username=keys.deviantart.get('username'),
-                    offset=offset
+                    offset=offset,
+                    limit=24
                 )
                 offset = following.get('next_offset')
                 for follow in following.get('results'):
@@ -53,7 +54,8 @@ class DAFavs(common.Favs):
             try:
                 folders = self.client.get_collections(
                     username=keys.deviantart.get('username'),
-                    offset=offset
+                    offset=offset,
+                    limit=24
                 )
                 offset = folders.get('next_offset')
                 for r in folders.get('results'):
@@ -73,6 +75,8 @@ class DAFavs(common.Favs):
                     self.favfolder,
                     username=keys.deviantart.get('username'),
                     offset=offset,
+                    limit=24,
+                    #mature_content=True
                 )
                 for r in fetched.get('results'):
                     fav = DAFav(r)
