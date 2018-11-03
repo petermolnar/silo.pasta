@@ -5,6 +5,7 @@ from bleach import clean
 import arrow
 import keys
 import common
+from common import cached_property
 import settings
 from pprint import pprint
 import logging
@@ -67,15 +68,13 @@ class FlickrFav(common.ImgFav):
     def __str__(self):
         return "fav-of %s" % (self.url)
 
-    @property
-    @common.cached_property
+    @cached_property
     def owner(self):
         return self.info.get('owner')
 
-    @property
-    @common.cached_property
+    @cached_property
     def info(self):
-        return flickrphoto.getInfo()
+        return self.flickrphoto.getInfo()
 
     @property
     def author(self):
