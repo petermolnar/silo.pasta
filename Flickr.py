@@ -143,7 +143,7 @@ class FlickrFav(common.ImgFav):
     @property
     def images(self):
         sizes = self.flickrphoto.getSizes()
-        for maybe in ['Original', 'Large 2048', 'Large 1600', 'Large']:
+        for maybe in ['Original', 'Large 2048', 'Large 1600', 'Large', 'Medium']:
             if maybe in sizes:
                 f = "%s%s" % (self.targetprefix, common.TMPFEXT)
                 return {
