@@ -5,11 +5,14 @@ import re
 import logging
 import shutil
 import subprocess
+import json
 import lxml.etree as etree
 from slugify import slugify
 import requests
+from requests.auth import HTTPBasicAuth
 import arrow
 import settings
+import keys
 from pprint import pprint
 
 TMPFEXT = '.xyz'
@@ -41,6 +44,50 @@ class cached_property(object):
 class Follows(object):
     def __init__(self):
         self.feeds = {}
+        self.auth =  HTTPBasicAuth(
+            keys.miniflux.get('username'),
+            keys.miniflux.get('token')
+        )
+
+    @cached_property
+    def active_subscriptions(self):
+        feeds = []
+        params = {
+            'jsonrpc': '2.0',
+            'method': 'getFeeds',
+            'id': keys.miniflux.get('id')
+        }
+        r = requests.post(
+            keys.miniflux.get('url'),
+            data=json.dumps(params),
+            auth=self.auth,
+        )
+        for feed in r.json().get('result', []):
+            try:
+                feeds.append(feed['feed_url'])
+            except Exception as e:
+                logging.error('problem with feed entry: %s', feed)
+        return feeds
+
+    def syncminiflux(self):
+        for silo, feeds in self.feeds.items():
+            for f in feeds:
+                feed = f.get('xmlUrl')
+                if feed not in self.active_subscriptions:
+                    params = {
+                        'jsonrpc': '2.0',
+                        'method': 'createFeed',
+                        'id': keys.miniflux.get('id'),
+                        'params': {
+                            'url': feed,
+                            'group_name': silo
+                        }
+                    }
+                    r = requests.post(
+                        keys.miniflux.get('url'),
+                        data=json.dumps(params),
+                        auth=self.auth,
+                    )
 
     def append(self, silo, feeds):
         self.feeds.update({silo: feeds})

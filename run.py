@@ -21,4 +21,5 @@ for silo in silos:
     silo.run()
     opml.append(silo.silo, silo.feeds)
 
+opml.syncminiflux()
 opml.export()
