@@ -1,5 +1,0 @@
-deviantart==0.1.5
-flickr-api==0.6.1
-PyTumblr==0.0.8
-arrow==0.12.1
-requests==2.19.1
