@@ -6,6 +6,7 @@ import logging
 import shutil
 import subprocess
 import json
+from io import BytesIO
 import lxml.etree as etree
 from slugify import slugify
 import requests
@@ -41,16 +42,15 @@ class cached_property(object):
         setattr(inst, self.name, result)
         return result
 
-class Follows(object):
+class Follows(dict):
     def __init__(self):
-        self.feeds = {}
         self.auth =  HTTPBasicAuth(
             keys.miniflux.get('username'),
             keys.miniflux.get('token')
         )
 
-    @cached_property
-    def active_subscriptions(self):
+    @property
+    def subscriptions(self):
         feeds = []
         params = {
             'jsonrpc': '2.0',
@@ -60,26 +60,29 @@ class Follows(object):
         r = requests.post(
             keys.miniflux.get('url'),
             data=json.dumps(params),
-            auth=self.auth,
+            auth=self.auth
         )
-        for feed in r.json().get('result', []):
+        return r.json().get('result', [])
+
+
+    def sync(self):
+        current = []
+        for feed in self.subscriptions:
             try:
-                feeds.append(feed['feed_url'])
+                current.append(feed['feed_url'])
             except Exception as e:
                 logging.error('problem with feed entry: %s', feed)
-        return feeds
-
-    def syncminiflux(self):
-        for silo, feeds in self.feeds.items():
-            for f in feeds:
-                feed = f.get('xmlUrl')
-                if feed not in self.active_subscriptions:
+        for silo, feeds in self.items():
+            for feed in feeds:
+                xmlurl = feed.get('xmlUrl')
+                if len(xmlurl) and xmlurl not in current:
+                    logging.info('creating subscription for: %s', feed)
                     params = {
                         'jsonrpc': '2.0',
                         'method': 'createFeed',
                         'id': keys.miniflux.get('id'),
                         'params': {
-                            'url': feed,
+                            'url': xmlurl,
                             'group_name': silo
                         }
                     }
@@ -89,35 +92,68 @@ class Follows(object):
                         auth=self.auth,
                     )
 
-    def append(self, silo, feeds):
-        self.feeds.update({silo: feeds})
-
     def export(self):
-        opml = etree.Element("opml")
-
+        opml = etree.Element("opml", version="1.0")
+        xmldoc = etree.ElementTree(opml)
+        opml.addprevious(
+            etree.ProcessingInstruction(
+                "xml-stylesheet",
+                'type="text/xsl" href="%s"' % (settings.opml.get('xsl'))
+            )
+        )
         head = etree.SubElement(opml, "head")
-        title = etree.SubElement(head, "title").text = "Social media RSS feeds"
+        title = etree.SubElement(head, "title").text = settings.opml.get('title')
+        dt = etree.SubElement(head, "dateCreated").text = arrow.utcnow().format('ddd, DD MMM YYYY HH:mm:ss UTC')
+        owner = etree.SubElement(head, "ownerName").text = settings.opml.get('owner')
+        email = etree.SubElement(head, "ownerEmail").text = settings.opml.get('email')
 
         body = etree.SubElement(opml, "body")
-        for silo, feeds in self.feeds.items():
-            s = etree.SubElement(body, "outline", text=silo)
-            for f in feeds:
-                entry = etree.SubElement(
-                    s,
+        groups = {}
+        for feed in self.subscriptions:
+            # contains sensitive data, skip it
+            if 'sessionid' in feed.get('feed_url') or 'sessionid' in feed.get('site_url'):
+                continue
+
+            fgroup = feed.get('groups',None)
+            if not fgroup:
+                fgroup = [{
+                    'title': 'Unknown',
+                    'id': -1
+                }]
+            fgroup = fgroup.pop()
+            # some groups need to be skipped
+            if fgroup['title'].lower() in ['nsfw', '_self']:
+                continue
+            if fgroup['title'] not in groups.keys():
+                groups[fgroup['title']] = etree.SubElement(
+                    body,
                     "outline",
-                    type="rss",
-                    text=f.get('text'),
-                    xmlUrl=f.get('xmlUrl'),
-                    htmlUrl=f.get('htmlUrl')
-                )
+                    text=fgroup['title']
+            )
+            entry = etree.SubElement(
+                groups[fgroup['title']],
+                "outline",
+                type="rss",
+                text=feed.get('title'),
+                xmlUrl=feed.get('feed_url'),
+                htmlUrl=feed.get('site_url')
+            )
 
         opmlfile = os.path.join(
-            settings.paths.get('archive'),
-            'feeds.opml'
+            settings.paths.get('content'),
+            'following.opml'
         )
 
         with open(opmlfile, 'wb') as f:
-            f.write(etree.tostring(opml, pretty_print=True))
+            f.write(
+                etree.tostring(
+                    xmldoc,
+                    encoding='utf-8',
+                    xml_declaration=True,
+                    pretty_print=True
+                )
+            )
+
 
 class Favs(object):
     def __init__(self, silo):

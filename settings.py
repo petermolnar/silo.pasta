@@ -5,8 +5,16 @@ import logging
 
 base = os.path.abspath(os.path.expanduser('~/Projects/petermolnar.net'))
 
+opml = {
+    'owner': 'Peter Molnar',
+    'email': 'mail@petermolnar.net',
+    'title': 'feeds followed by petermolnar.net',
+    'xsl': 'https://petermolnar.net/following.xsl'
+}
+
 paths = {
     'archive': os.path.join(base, 'archive'),
+    'content': os.path.join(base, 'content'),
 }
 
 loglevels = {
@@ -20,7 +28,7 @@ loglevels = {
 _parser = argparse.ArgumentParser(description='Parameters for silo.pasta')
 _parser.add_argument(
     '--loglevel',
-    default='debug',
+    default='info',
     help='change loglevel'
 )
 

@@ -6,11 +6,14 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-deviantart = "==0.1.5"
-arrow = "==0.12.1"
-requests = "==2.19.1"
-flickr_api = "==0.6.1"
-PyTumblr = "==0.0.8"
+requests = "*"
+arrow = "*"
+unicode-slugify = "*"
+lxml = "*"
+bleach = "*"
+deviantart = "*"
+flickr-api = "*"
+pytumblr = "*"
 
 [requires]
 python_version = "3.6"
