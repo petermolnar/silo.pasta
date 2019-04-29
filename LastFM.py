@@ -15,6 +15,26 @@ Track = namedtuple(
     ['timestamp', 'artist', 'album', 'title', 'artistid', 'albumid', 'img']
 )
 
+
+class cached_property(object):
+    """ extermely simple cached_property decorator:
+    whenever something is called as @cached_property, on first run, the
+    result is calculated, then the class method is overwritten to be
+    a property, contaning the result from the method
+    """
+
+    def __init__(self, method, name=None):
+        self.method = method
+        self.name = name or method.__name__
+
+    def __get__(self, inst, cls):
+        if inst is None:
+            return self
+        result = self.method(inst)
+        setattr(inst, self.name, result)
+        return result
+
+
 class LastFM(object):
     url = 'http://ws.audioscrobbler.com/2.0/'
 
@@ -37,20 +57,35 @@ class LastFM(object):
             'lastfm.csv'
         )
 
+    @cached_property
+    def existing(self):
+        timestamps = []
+        with open(self.target, 'r') as f:
+            r = csv.reader(f)
+            for row in r:
+                try:
+                    timestamps.append(arrow.get(row[0]).timestamp)
+                except Exception as e:
+                    logging.error('arrow failed on row %s', row)
+                    continue
+        return timestamps
+
     @property
     def exists(self):
         return os.path.isfile(self.target)
 
-
     def extracttracks(self, data):
         tracks = []
+        if not data:
+            return tracks
         for track in data.get('track', []):
             if 'date' not in track:
                 continue
+            ts = arrow.get(int(track.get('date').get('uts')))
+            if ts.timestamp in self.existing:
+                continue
             entry = Track(
-                arrow.get(
-                    int(track.get('date').get('uts'))
-                ).format('YYYY-MM-DDTHH:mm:ssZ'),
+                ts.format('YYYY-MM-DDTHH:mm:ssZ'),
                 track.get('artist').get('#text', ''),
                 track.get('album').get('#text', ''),
                 track.get('name', ''),
@@ -67,11 +102,15 @@ class LastFM(object):
 
 
     def run(self):
-        data = self.fetch()
-        tracks = self.extracttracks(data)
-        total = int(data.get('@attr').get('totalPages'))
-        current = int(data.get('@attr').get('page'))
-        cntr = total - current
+        try:
+            data = self.fetch()
+            tracks = self.extracttracks(data)
+            total = int(data.get('@attr').get('totalPages'))
+            current = int(data.get('@attr').get('page'))
+            cntr = total - current
+        except Exception as e:
+            logging.error('Something went wrong: %s', e)
+            return
 
         if not len(tracks):
             return
