@@ -162,13 +162,6 @@ class ASLike(common.ImgFav):
         )
 
     @property
-    def exists(self):
-        maybe = glob.glob("%s*" % self.targetprefix)
-        if len(maybe):
-            return True
-        return False
-
-    @property
     def published(self):
         return arrow.get(self.like.get("published_at"))
 
@@ -192,10 +185,6 @@ class ASLike(common.ImgFav):
             r.update({f: img.get("image_url")})
             cntr = cntr + 1
         return r
-
-    def run(self):
-        if not self.exists:
-            self.fetch_images()
 
 
 if __name__ == "__main__":

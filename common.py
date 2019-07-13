@@ -14,16 +14,23 @@ from requests.auth import HTTPBasicAuth
 import arrow
 import settings
 import keys
+import yaml
 from pprint import pprint
 
-TMPFEXT = '.xyz'
+TMPFEXT = ".xyz"
+MDFEXT = ".md"
+
+
+def utfyamldump(data):
+    """ dump YAML with actual UTF-8 chars """
+    return yaml.dump(data, default_flow_style=False, indent=4, allow_unicode=True)
+
 
 def slugfname(url):
-    return slugify(
-        re.sub(r"^https?://(?:www)?", "", url),
-        only_ascii=True,
-        lower=True
-    )[:200]
+    return slugify(re.sub(r"^https?://(?:www)?", "", url), only_ascii=True, lower=True)[
+        :200
+    ]
+
 
 class cached_property(object):
     """ extermely simple cached_property decorator:
@@ -31,6 +38,7 @@ class cached_property(object):
     result is calculated, then the class method is overwritten to be
     a property, contaning the result from the method
     """
+
     def __init__(self, method, name=None):
         self.method = method
         self.name = name or method.__name__
@@ -42,52 +50,42 @@ class cached_property(object):
         setattr(inst, self.name, result)
         return result
 
+
 class Follows(dict):
     def __init__(self):
-        self.auth =  HTTPBasicAuth(
-            keys.miniflux.get('username'),
-            keys.miniflux.get('token')
+        self.auth = HTTPBasicAuth(
+            keys.miniflux.get("username"), keys.miniflux.get("token")
         )
 
     @property
     def subscriptions(self):
         feeds = []
-        params = {
-            'jsonrpc': '2.0',
-            'method': 'getFeeds',
-            'id': keys.miniflux.get('id')
-        }
+        params = {"jsonrpc": "2.0", "method": "getFeeds", "id": keys.miniflux.get("id")}
         r = requests.post(
-            keys.miniflux.get('url'),
-            data=json.dumps(params),
-            auth=self.auth
+            keys.miniflux.get("url"), data=json.dumps(params), auth=self.auth
         )
-        return r.json().get('result', [])
-
+        return r.json().get("result", [])
 
     def sync(self):
         current = []
         for feed in self.subscriptions:
             try:
-                current.append(feed['feed_url'])
+                current.append(feed["feed_url"])
             except Exception as e:
-                logging.error('problem with feed entry: %s', feed)
+                logging.error("problem with feed entry: %s", feed)
         for silo, feeds in self.items():
             for feed in feeds:
-                xmlurl = feed.get('xmlUrl')
+                xmlurl = feed.get("xmlUrl")
                 if len(xmlurl) and xmlurl not in current:
-                    logging.info('creating subscription for: %s', feed)
+                    logging.info("creating subscription for: %s", feed)
                     params = {
-                        'jsonrpc': '2.0',
-                        'method': 'createFeed',
-                        'id': keys.miniflux.get('id'),
-                        'params': {
-                            'url': xmlurl,
-                            'group_name': silo
-                        }
+                        "jsonrpc": "2.0",
+                        "method": "createFeed",
+                        "id": keys.miniflux.get("id"),
+                        "params": {"url": xmlurl, "group_name": silo},
                     }
                     r = requests.post(
-                        keys.miniflux.get('url'),
+                        keys.miniflux.get("url"),
                         data=json.dumps(params),
                         auth=self.auth,
                     )
@@ -98,59 +96,52 @@ class Follows(dict):
         opml.addprevious(
             etree.ProcessingInstruction(
                 "xml-stylesheet",
-                'type="text/xsl" href="%s"' % (settings.opml.get('xsl'))
+                'type="text/xsl" href="%s"' % (settings.opml.get("xsl")),
             )
         )
         head = etree.SubElement(opml, "head")
-        title = etree.SubElement(head, "title").text = settings.opml.get('title')
-        dt = etree.SubElement(head, "dateCreated").text = arrow.utcnow().format('ddd, DD MMM YYYY HH:mm:ss UTC')
-        owner = etree.SubElement(head, "ownerName").text = settings.opml.get('owner')
-        email = etree.SubElement(head, "ownerEmail").text = settings.opml.get('email')
+        title = etree.SubElement(head, "title").text = settings.opml.get("title")
+        dt = etree.SubElement(head, "dateCreated").text = arrow.utcnow().format(
+            "ddd, DD MMM YYYY HH:mm:ss UTC"
+        )
+        owner = etree.SubElement(head, "ownerName").text = settings.opml.get("owner")
+        email = etree.SubElement(head, "ownerEmail").text = settings.opml.get("email")
 
         body = etree.SubElement(opml, "body")
         groups = {}
         for feed in self.subscriptions:
             # contains sensitive data, skip it
-            if 'sessionid' in feed.get('feed_url') or 'sessionid' in feed.get('site_url'):
+            if "sessionid" in feed.get("feed_url") or "sessionid" in feed.get(
+                "site_url"
+            ):
                 continue
 
-            fgroup = feed.get('groups',None)
+            fgroup = feed.get("groups", None)
             if not fgroup:
-                fgroup = [{
-                    'title': 'Unknown',
-                    'id': -1
-                }]
+                fgroup = [{"title": "Unknown", "id": -1}]
             fgroup = fgroup.pop()
             # some groups need to be skipped
-            if fgroup['title'].lower() in ['private']:
+            if fgroup["title"].lower() in ["private"]:
                 continue
-            if fgroup['title'] not in groups.keys():
-                groups[fgroup['title']] = etree.SubElement(
-                    body,
-                    "outline",
-                    text=fgroup['title']
-            )
+            if fgroup["title"] not in groups.keys():
+                groups[fgroup["title"]] = etree.SubElement(
+                    body, "outline", text=fgroup["title"]
+                )
             entry = etree.SubElement(
-                groups[fgroup['title']],
+                groups[fgroup["title"]],
                 "outline",
                 type="rss",
-                text=feed.get('title'),
-                xmlUrl=feed.get('feed_url'),
-                htmlUrl=feed.get('site_url')
+                text=feed.get("title"),
+                xmlUrl=feed.get("feed_url"),
+                htmlUrl=feed.get("site_url"),
             )
 
-        opmlfile = os.path.join(
-            settings.paths.get('content'),
-            'following.opml'
-        )
+        opmlfile = os.path.join(settings.paths.get("content"), "following.opml")
 
-        with open(opmlfile, 'wb') as f:
+        with open(opmlfile, "wb") as f:
             f.write(
                 etree.tostring(
-                    xmldoc,
-                    encoding='utf-8',
-                    xml_declaration=True,
-                    pretty_print=True
+                    xmldoc, encoding="utf-8", xml_declaration=True, pretty_print=True
                 )
             )
 
@@ -165,11 +156,7 @@ class Favs(object):
 
     @property
     def since(self):
-        d = os.path.join(
-            settings.paths.get('archive'),
-            'favorite',
-            "%s*" % self.silo
-        )
+        d = os.path.join(settings.paths.get("archive"), "favorite", "%s*" % self.silo)
         files = glob.glob(d)
         if len(files):
             mtime = max([int(os.path.getmtime(f)) for f in files])
@@ -182,6 +169,33 @@ class ImgFav(object):
     def __init__(self):
         return
 
+    def run(self):
+        if not self.exists:
+            self.fetch_images()
+            self.save_txt()
+
+    @property
+    def exists(self):
+        maybe = glob.glob("%s*" % self.targetprefix)
+        if len(maybe):
+            return True
+        return False
+
+    def save_txt(self):
+        attachments = [os.path.basename(fn) for fn in glob.glob("%s*" % self.targetprefix)
+            if not os.path.basename(fn).endswith('.md')]
+        meta = {
+            "title": self.title,
+            "favorite-of": self.url,
+            "date": str(self.published),
+            "sources": list(self.images.values()),
+            "attachments": attachments,
+            "author": self.author,
+        }
+        r = "---\n%s\n---\n\n" % (utfyamldump(meta))
+        with open("%s%s" % (self.targetprefix, MDFEXT), "wt") as fpath:
+            fpath.write(r)
+
     def fetch_images(self):
         for fpath, url in self.images.items():
             self.fetch_image(fpath, url)
@@ -190,7 +204,7 @@ class ImgFav(object):
         logging.info("pulling image %s to %s", url, fpath)
         r = requests.get(url, stream=True)
         if r.status_code == 200:
-            with open(fpath, 'wb') as f:
+            with open(fpath, "wb") as f:
                 r.raw.decode_content = True
                 shutil.copyfileobj(r.raw, f)
 
@@ -198,58 +212,60 @@ class ImgFav(object):
         if not imgtype:
             os.remove(fpath)
             return
-        if imgtype in ['jpg', 'jpeg', 'png']:
+        if imgtype in ["jpg", "jpeg", "png"]:
             self.write_exif(fpath)
         os.rename(fpath, fpath.replace(TMPFEXT, ".%s" % (imgtype)))
 
     def write_exif(self, fpath):
-        logging.info('populating EXIF data of %s' % fpath)
+        logging.info("populating EXIF data of %s" % fpath)
 
         geo_lat = False
         geo_lon = False
 
-        if hasattr(self, 'geo') and self.geo != None:
+        if hasattr(self, "geo") and self.geo != None:
             lat, lon = self.geo
-            if lat and lon and 'null' != lat and 'null' != lon:
+            if lat and lon and "null" != lat and "null" != lon:
                 geo_lat = lat
                 geo_lon = lon
 
         params = [
-            'exiftool',
-            '-overwrite_original',
-            '-XMP:Copyright=Copyright %s %s (%s)' % (
-                self.published.to('utc').format('YYYY'),
-                self.author.get('name'),
-                self.author.get('url'),
+            "exiftool",
+            "-overwrite_original",
+            "-XMP:Copyright=Copyright %s %s (%s)"
+            % (
+                self.published.to("utc").format("YYYY"),
+                self.author.get("name"),
+                self.author.get("url"),
             ),
-            '-XMP:Source=%s' % self.url,
-            '-XMP:ReleaseDate=%s' % self.published.to('utc').format('YYYY:MM:DD HH:mm:ss'),
-            '-XMP:Headline=%s' % self.title,
-            '-XMP:Description=%s' % self.content,
+            "-XMP:Source=%s" % self.url,
+            "-XMP:ReleaseDate=%s"
+            % self.published.to("utc").format("YYYY:MM:DD HH:mm:ss"),
+            "-XMP:Headline=%s" % self.title,
+            "-XMP:Description=%s" % self.content,
         ]
 
         for t in self.tags:
-            params.append('-XMP:HierarchicalSubject+=%s' % t)
-            params.append('-XMP:Subject+=%s' % t)
+            params.append("-XMP:HierarchicalSubject+=%s" % t)
+            params.append("-XMP:Subject+=%s" % t)
 
         if geo_lat and geo_lon:
             geo_lat = round(float(geo_lat), 6)
             geo_lon = round(float(geo_lon), 6)
 
             if geo_lat < 0:
-                GPSLatitudeRef = 'S'
+                GPSLatitudeRef = "S"
             else:
-                GPSLatitudeRef = 'N'
+                GPSLatitudeRef = "N"
 
             if geo_lon < 0:
-                GPSLongitudeRef = 'W'
+                GPSLongitudeRef = "W"
             else:
-                GPSLongitudeRef = 'E'
+                GPSLongitudeRef = "E"
 
-            params.append('-GPSLongitude=%s' % abs(geo_lon))
-            params.append('-GPSLatitude=%s' % abs(geo_lat))
-            params.append('-GPSLongitudeRef=%s' % GPSLongitudeRef)
-            params.append('-GPSLatitudeRef=%s' % GPSLatitudeRef)
+            params.append("-GPSLongitude=%s" % abs(geo_lon))
+            params.append("-GPSLatitude=%s" % abs(geo_lat))
+            params.append("-GPSLongitudeRef=%s" % GPSLongitudeRef)
+            params.append("-GPSLatitudeRef=%s" % GPSLatitudeRef)
 
         params.append(fpath)
 
@@ -261,6 +277,6 @@ class ImgFav(object):
         )
 
         stdout, stderr = p.communicate()
-        _original = '%s_original' % fpath
+        _original = "%s_original" % fpath
         if os.path.exists(_original):
             os.unlink(_original)
