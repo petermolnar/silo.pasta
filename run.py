@@ -23,6 +23,5 @@ for silo in silos:
     silo.run()
     opml.update({silo.silo: silo.feeds})
 
-
 opml.sync()
 opml.export()

@@ -122,7 +122,7 @@ class Follows(dict):
                 }]
             fgroup = fgroup.pop()
             # some groups need to be skipped
-            if fgroup['title'].lower() in ['nsfw', '_self']:
+            if fgroup['title'].lower() in ['private']:
                 continue
             if fgroup['title'] not in groups.keys():
                 groups[fgroup['title']] = etree.SubElement(
