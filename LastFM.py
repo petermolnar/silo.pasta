@@ -9,6 +9,7 @@ import arrow
 import settings
 import keys
 from pprint import pprint
+from math import floor
 
 Track = namedtuple(
     "Track", ["timestamp", "artist", "album", "title", "artistid", "albumid", "img"]
@@ -97,6 +98,8 @@ class LastFM(object):
         return json.loads(r.text).get("recenttracks")
 
     def run(self):
+        startpage = floor(len(self.existing) / int(self.params.get("limit")))
+        self.params.update({"page": startpage})
         try:
             data = self.fetch()
             tracks = self.extracttracks(data)

@@ -7,8 +7,8 @@ import Flickr
 import Artstation
 from pprint import pprint
 
-# lfm = LastFM.LastFM()
-# lfm.run()
+lfm = LastFM.LastFM()
+lfm.run()
 
 opml = common.Follows()
 
