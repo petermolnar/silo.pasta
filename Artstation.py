@@ -7,34 +7,51 @@ import requests
 import keys
 import common
 import settings
+from time import sleep
 from math import ceil
+import random
 from pprint import pprint
 
 
 class ASFavs(common.Favs):
-    headers = {
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:67.0) Gecko/20100101 Firefox/67.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate, br",
-        "DNT": "1",
-        "Connection": "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Pragma": "no-cache",
-        "Cache-Control": "no-cache",
-    }
-
     def __init__(self):
         super().__init__("artstation")
         self.user = keys.artstation.get("username")
         self.session = requests.Session()
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:69.0) Gecko/20100101 Firefox/69.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.5",
+            #"DNT": "1",
+            "Connection": "keep-alive",
+            "Upgrade-Insecure-Requests": "1",
+            "Pragma": "no-cache",
+            "Cache-Control": "max-age=0, no-cache",
+        })
+
+
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:69.0) Gecko/20100101 Firefox/69.0",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "DNT": "1",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Pragma": "no-cache",
+    "Cache-Control": "max-age=0, no-cache",
+})
 
     def paged_likes(self, page=1):
         url = "https://www.artstation.com/users/%s/likes.json?page=%s" % (
             self.user,
             page,
         )
-        js = self.session.get(url, headers=self.headers)
+        js = self.session.get(url)
+        while js.status_code != requests.codes.ok:
+            # FU cloudflare
+            pprint(self.session.cookies)
+            sleep(round(random.uniform(0.7,3.5), 2))
+            js = self.session.get(url)
         try:
             js = js.json()
             if "data" not in js:
@@ -46,18 +63,13 @@ class ASFavs(common.Favs):
 
     @property
     def likes(self):
-        # init Session and it's cookies before doing anything
-        # FU cloudflare, I'm trying to access my own likes and followings!
-        url = "https://www.artstation.com/"
-        self.session.get(url, headers=self.headers)
-        # now do the real work
-        js = self.paged_likes()
+        js = self.paged_likes(1)
         if not js:
             return []
         likes = js.get("data", [])
         pages = ceil(js.get("total_count", 1) / 50)
         while pages > 1:
-            extras = self.paged_likes()
+            extras = self.paged_likes(pages)
             if not extras:
                 continue
             likes = likes + extras.get("data", [])
@@ -88,6 +100,7 @@ class ASFavs(common.Favs):
         return feeds
 
     def run(self):
+        # FU cloudflare
         for like in self.likes:
             like = ASLike(like, self.session, self.headers)
             like.run()
@@ -138,14 +151,14 @@ class ASLike(common.ImgFav):
         if not len(title):
             title = self.like.get("slug")
         if not len(title):
-            title = common.slugfname(self.url)
+            title = common.url2slug(self.url)
         return title
 
     @property
     def slug(self):
         maybe = self.like.get("slug")
         if not len(maybe):
-            maybe = common.slugfname(self.url)
+            maybe = common.url2slug(self.url)
         return maybe
 
     @property
@@ -155,7 +168,7 @@ class ASLike(common.ImgFav):
             "favorite",
             "artstation_%s_%s_%s"
             % (
-                common.slugfname("%s" % self.like.get("user").get("username")),
+                common.url2slug("%s" % self.like.get("user").get("username")),
                 self.like.get("hash_id"),
                 self.slug,
             ),

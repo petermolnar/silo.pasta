@@ -3,19 +3,25 @@ import re
 import argparse
 import logging
 
+class nameddict(dict):
+    __getattr__ = dict.get
+    __setattr__ = dict.__setitem__
+    __delattr__ = dict.__delitem__
+
 base = os.path.abspath(os.path.expanduser("~/Projects/petermolnar.net"))
 
-opml = {
+opml = nameddict({
     "owner": "Peter Molnar",
     "email": "mail@petermolnar.net",
     "title": "feeds followed by petermolnar.net",
     "xsl": "https://petermolnar.net/following.xsl",
-}
+})
 
-paths = {
+paths = nameddict({
     "archive": os.path.join(base, "archive"),
     "content": os.path.join(base, "content"),
-}
+    "bookmarks": os.path.join(base, "archive", "bookmarks")
+})
 
 loglevels = {"critical": 50, "error": 40, "warning": 30, "info": 20, "debug": 10}
 

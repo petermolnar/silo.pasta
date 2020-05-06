@@ -1,7 +1,6 @@
 keys.py
-.venv
-__pycache
-keys.py
-__pycache__
 lib
+__pycache
+__pycache__
 _scratch
+.venv

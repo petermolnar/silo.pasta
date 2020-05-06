@@ -122,7 +122,7 @@ class DAFav(common.ImgFav):
     def title(self):
         title = self.deviation.title
         if not len(title):
-            title = common.slugfname(self.url)
+            title = common.url2slug(self.url)
         return clean(title.strip())
 
     @property
@@ -132,15 +132,15 @@ class DAFav(common.ImgFav):
             "favorite",
             "deviantart_%s_%s_%s"
             % (
-                common.slugfname("%s" % self.deviation.author),
+                common.url2slug("%s" % self.deviation.author),
                 self.id,
-                common.slugfname("%s" % self.title),
+                common.url2slug("%s" % self.title),
             ),
         )
 
     @property
     def published(self):
-        return arrow.get(self.deviation.published_time)
+        return arrow.get(int(self.deviation.published_time))
 
     @property
     def tags(self):

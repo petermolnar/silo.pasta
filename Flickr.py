@@ -10,9 +10,6 @@ import settings
 from pprint import pprint
 import logging
 
-# class FlickrFollows(common.Follows):
-
-
 class FlickrFavs(common.Favs):
     def __init__(self):
         super().__init__("flickr")
@@ -109,12 +106,16 @@ class FlickrFav(common.ImgFav):
         return os.path.join(
             settings.paths.get("archive"),
             "favorite",
-            "flickr_%s_%s" % (common.slugfname("%s" % self.owner.id), self.id),
+            "flickr_%s_%s" % (common.url2slug("%s" % self.owner.id), self.id),
         )
 
     @property
     def published(self):
-        return arrow.get(self.info.get("dateuploaded"))
+        x = self.info.get("dateuploaded")
+        if x.isnumeric():
+            return arrow.get(int(x))
+        else:
+            return arrow.get(x)
 
     @property
     def tags(self):

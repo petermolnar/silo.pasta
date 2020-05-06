@@ -39,7 +39,8 @@ class TumblrFavs(common.Favs):
                 feeds.append(
                     {
                         "text": u.get("name"),
-                        "xmlUrl": "%srss" % u.get("url"),
+                        "xmlUrl": "https://cloud.petermolnar.net/rss-bridge/index.php?action=display&bridge=Tumblr&searchUsername=%s&format=Atom" % u.get("name"),
+                        #"xmlUrl": "%srss" % u.get("url"),
                         "htmlUrl": u.get("url"),
                     }
                 )
@@ -95,7 +96,7 @@ class TumblrFav(common.ImgFav):
         if not len(title):
             title = self.data.get("slug", "")
         if not len(title):
-            title = common.slugfname(self.url)
+            title = common.url2slug(self.url)
         return clean(title.strip())
 
     @property

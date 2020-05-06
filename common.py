@@ -16,20 +16,36 @@ import settings
 import keys
 import yaml
 from pprint import pprint
+import feedparser
 
 TMPFEXT = ".xyz"
 MDFEXT = ".md"
 
+TMPSUBDIR = "nasg"
+SHM = "/dev/shm"
+
+if os.path.isdir(SHM) and os.access(SHM, os.W_OK):
+    TMPDIR = f"{SHM}/{TMPSUBDIR}"
+else:
+    TMPDIR = os.path.join(gettempdir(), TMPSUBDIR)
+
+if not os.path.isdir(TMPDIR):
+    os.makedirs(TMPDIR)
+
 
 def utfyamldump(data):
     """ dump YAML with actual UTF-8 chars """
-    return yaml.dump(data, default_flow_style=False, indent=4, allow_unicode=True)
+    return yaml.dump(
+        data, default_flow_style=False, indent=4, allow_unicode=True
+    )
 
 
-def slugfname(url):
-    return slugify(re.sub(r"^https?://(?:www)?", "", url), only_ascii=True, lower=True)[
-        :200
-    ]
+def url2slug(url):
+    return slugify(
+        re.sub(r"^https?://(?:www)?", "", url),
+        only_ascii=True,
+        lower=True,
+    )[:200]
 
 
 class cached_property(object):
@@ -51,7 +67,178 @@ class cached_property(object):
         return result
 
 
-class Follows(dict):
+class Aperture(object):
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update(
+            {
+                "Authorization": "Bearer %s"
+                % (keys.aperture["access_token"])
+            }
+        )
+        self.url = keys.aperture["url"]
+
+    @cached_property
+    def channels(self):
+        channels = self.session.get(f"{self.url}?action=channels")
+        if channels.status_code != requests.codes.ok:
+            logging.error(
+                "failed to get channels from aperture: ", channels.text
+            )
+            return None
+        try:
+            channels = channels.json()
+        except ValueError as e:
+            logging.error("failed to parse channels from aperture: ", e)
+            return None
+
+        if "channels" not in channels:
+            logging.error("no channels found in aperture: ")
+            return None
+
+        return channels["channels"]
+
+    def channelid(self, channelname):
+        for channel in self.channels:
+            if channel["name"].lower() == channelname.lower():
+                return channel["uid"]
+        return None
+
+    def feedmeta(self, url):
+        cfile = os.path.join(
+            TMPDIR,
+            "%s.%s.json" % (url2slug(url), self.__class__.__name__)
+        )
+        if os.path.exists(cfile):
+            with open(cfile, 'rt') as cache:
+                return json.loads(cache.read())
+        r = {
+            'title': url,
+            'feed': url,
+            'link': url,
+            'type': 'rss'
+        }
+        try:
+            feed = feedparser.parse(url)
+            if 'feed' in feed:
+                for maybe in ['title', 'link']:
+                    if maybe in feed['feed']:
+                        r[maybe] = feed['feed'][maybe]
+        except Exception as e:
+            logging.error("feedparser failed on %s: %s" %(url, e))
+            r['type']: 'hfeed'
+            pass
+
+        with open(cfile, 'wt') as cache:
+            cache.write(json.dumps(r))
+
+        return r
+
+
+    def channelfollows(self, channelid):
+        follows = self.session.get(
+            f"{self.url}?action=follow&channel={channelid}"
+        )
+        if follows.status_code != requests.codes.ok:
+            logging.error(
+                "failed to get follows from aperture: ", follows.text
+            )
+            return
+        try:
+            follows = follows.json()
+        except ValueError as e:
+            logging.error("failed to parse follows from aperture: ", e)
+            return
+
+        if "items" not in follows:
+            logging.error(
+                f"no follows found in aperture for channel {channelid}"
+            )
+            return
+
+        existing = {}
+        for follow in follows["items"]:
+            meta = self.feedmeta(follow["url"])
+            existing.update({follow["url"]: meta})
+        return existing
+
+    @cached_property
+    def follows(self):
+        follows = {}
+        for channel in self.channels:
+            follows[channel["name"]] = self.channelfollows(
+                channel["uid"]
+            )
+        return follows
+
+    def export(self):
+        opml = etree.Element("opml", version="1.0")
+        xmldoc = etree.ElementTree(opml)
+        opml.addprevious(
+            etree.ProcessingInstruction(
+                "xml-stylesheet",
+                'type="text/xsl" href="%s"'
+                % (settings.opml.get("xsl")),
+            )
+        )
+
+        head = etree.SubElement(opml, "head")
+        title = etree.SubElement(
+            head, "title"
+        ).text = settings.opml.get("title")
+        dt = etree.SubElement(
+            head, "dateCreated"
+        ).text = arrow.utcnow().format("ddd, DD MMM YYYY HH:mm:ss UTC")
+        owner = etree.SubElement(
+            head, "ownerName"
+        ).text = settings.opml.get("owner")
+        email = etree.SubElement(
+            head, "ownerEmail"
+        ).text = settings.opml.get("email")
+
+        body = etree.SubElement(opml, "body")
+        groups = {}
+        for group, feeds in self.follows.items():
+            if (
+                "private" in group.lower()
+                or "nsfw" in group.lower()
+            ):
+                continue
+
+            if group not in groups.keys():
+                groups[group] = etree.SubElement(
+                    body, "outline", text=group
+                )
+            for url, meta in feeds.items():
+                entry = etree.SubElement(
+                    groups[group],
+                    "outline",
+                    type="rss",
+                    text=meta['title'],
+                    xmlUrl=meta['feed'],
+                    htmlUrl=meta['link']
+                )
+                etree.tostring(
+                    xmldoc,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                    pretty_print=True,
+                )
+        opmlfile = os.path.join(
+            settings.paths.get("content"), "following.opml"
+        )
+        with open(opmlfile, "wb") as f:
+            f.write(
+                etree.tostring(
+                    xmldoc,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                    pretty_print=True,
+                )
+            )
+
+
+class MinifluxFollows(dict):
     def __init__(self):
         self.auth = HTTPBasicAuth(
             keys.miniflux.get("username"), keys.miniflux.get("token")
@@ -60,9 +247,15 @@ class Follows(dict):
     @property
     def subscriptions(self):
         feeds = []
-        params = {"jsonrpc": "2.0", "method": "getFeeds", "id": keys.miniflux.get("id")}
+        params = {
+            "jsonrpc": "2.0",
+            "method": "getFeeds",
+            "id": keys.miniflux.get("id"),
+        }
         r = requests.post(
-            keys.miniflux.get("url"), data=json.dumps(params), auth=self.auth
+            keys.miniflux.get("url"),
+            data=json.dumps(params),
+            auth=self.auth,
         )
         return r.json().get("result", [])
 
@@ -96,24 +289,31 @@ class Follows(dict):
         opml.addprevious(
             etree.ProcessingInstruction(
                 "xml-stylesheet",
-                'type="text/xsl" href="%s"' % (settings.opml.get("xsl")),
+                'type="text/xsl" href="%s"'
+                % (settings.opml.get("xsl")),
             )
         )
         head = etree.SubElement(opml, "head")
-        title = etree.SubElement(head, "title").text = settings.opml.get("title")
-        dt = etree.SubElement(head, "dateCreated").text = arrow.utcnow().format(
-            "ddd, DD MMM YYYY HH:mm:ss UTC"
-        )
-        owner = etree.SubElement(head, "ownerName").text = settings.opml.get("owner")
-        email = etree.SubElement(head, "ownerEmail").text = settings.opml.get("email")
+        title = etree.SubElement(
+            head, "title"
+        ).text = settings.opml.get("title")
+        dt = etree.SubElement(
+            head, "dateCreated"
+        ).text = arrow.utcnow().format("ddd, DD MMM YYYY HH:mm:ss UTC")
+        owner = etree.SubElement(
+            head, "ownerName"
+        ).text = settings.opml.get("owner")
+        email = etree.SubElement(
+            head, "ownerEmail"
+        ).text = settings.opml.get("email")
 
         body = etree.SubElement(opml, "body")
         groups = {}
         for feed in self.subscriptions:
             # contains sensitive data, skip it
-            if "sessionid" in feed.get("feed_url") or "sessionid" in feed.get(
-                "site_url"
-            ):
+            if "sessionid" in feed.get(
+                "feed_url"
+            ) or "sessionid" in feed.get("site_url"):
                 continue
 
             fgroup = feed.get("groups", None)
@@ -136,12 +336,17 @@ class Follows(dict):
                 htmlUrl=feed.get("site_url"),
             )
 
-        opmlfile = os.path.join(settings.paths.get("content"), "following.opml")
+        opmlfile = os.path.join(
+            settings.paths.get("content"), "following.opml"
+        )
 
         with open(opmlfile, "wb") as f:
             f.write(
                 etree.tostring(
-                    xmldoc, encoding="utf-8", xml_declaration=True, pretty_print=True
+                    xmldoc,
+                    encoding="utf-8",
+                    xml_declaration=True,
+                    pretty_print=True,
                 )
             )
 
@@ -149,6 +354,11 @@ class Follows(dict):
 class Favs(object):
     def __init__(self, silo):
         self.silo = silo
+        self.aperture_auth = {
+            "Authorization": "Bearer %s"
+            % (keys.aperture["access_token"])
+        }
+        self.aperture_chid = 0
 
     @property
     def feeds(self):
@@ -156,13 +366,90 @@ class Favs(object):
 
     @property
     def since(self):
-        d = os.path.join(settings.paths.get("archive"), "favorite", "%s*" % self.silo)
+        d = os.path.join(
+            settings.paths.get("archive"), "favorite", "%s*" % self.silo
+        )
         files = glob.glob(d)
         if len(files):
             mtime = max([int(os.path.getmtime(f)) for f in files])
         else:
             mtime = 0
         return mtime
+
+    def sync_with_aperture(self):
+        channels = requests.get(
+            "%s?action=channels" % (keys.aperture["url"]),
+            headers=self.aperture_auth,
+        )
+        if channels.status_code != requests.codes.ok:
+            logging.error(
+                "failed to get channels from aperture: ", channels.text
+            )
+            return
+        try:
+            channels = channels.json()
+        except ValueError as e:
+            logging.error("failed to parse channels from aperture: ", e)
+            return
+
+        if "channels" not in channels:
+            logging.error("no channels found in aperture: ")
+            return
+
+        for channel in channels["channels"]:
+            if channel["name"].lower() == self.silo.lower():
+                self.aperture_chid = channel["uid"]
+                break
+
+        if not self.aperture_chid:
+            logging.error("no channels found for silo ", self.silo)
+            return
+
+        follows = requests.get(
+            "%s?action=follow&channel=%s"
+            % (keys.aperture["url"], self.aperture_chid),
+            headers=self.aperture_auth,
+        )
+        if follows.status_code != requests.codes.ok:
+            logging.error(
+                "failed to get follows from aperture: ", follows.text
+            )
+            return
+        try:
+            follows = follows.json()
+        except ValueError as e:
+            logging.error("failed to parse follows from aperture: ", e)
+            return
+
+        if "items" not in follows:
+            logging.error(
+                "no follows found in aperture for channel %s (%s)"
+                % (self.silo, self.aperture_chid)
+            )
+            return
+
+        existing = []
+        for follow in follows["items"]:
+            existing.append(follow["url"])
+        existing = list(set(existing))
+
+        for feed in self.feeds:
+            if feed["xmlUrl"] not in existing:
+                subscribe_to = {
+                    "action": "follow",
+                    "channel": self.aperture_chid,
+                    "url": feed["xmlUrl"],
+                }
+                logging.info(
+                    "subscribing to %s into %s (%s)"
+                    % (feed, self.silo, self.aperture_chid)
+                )
+                subscribe = requests.post(
+                    keys.aperture["url"],
+                    headers=self.aperture_auth,
+                    data=subscribe_to,
+                )
+                logging.debug(subscribe.text)
 
 
 class ImgFav(object):
@@ -182,8 +469,11 @@ class ImgFav(object):
         return False
 
     def save_txt(self):
-        attachments = [os.path.basename(fn) for fn in glob.glob("%s*" % self.targetprefix)
-            if not os.path.basename(fn).endswith('.md')]
+        attachments = [
+            os.path.basename(fn)
+            for fn in glob.glob("%s*" % self.targetprefix)
+            if not os.path.basename(fn).endswith(".md")
+        ]
         meta = {
             "title": self.title,
             "favorite-of": self.url,

@@ -10,30 +10,11 @@ import settings
 import keys
 from pprint import pprint
 from math import floor
+from common import cached_property
 
 Track = namedtuple(
     "Track", ["timestamp", "artist", "album", "title", "artistid", "albumid", "img"]
 )
-
-
-class cached_property(object):
-    """ extermely simple cached_property decorator:
-    whenever something is called as @cached_property, on first run, the
-    result is calculated, then the class method is overwritten to be
-    a property, contaning the result from the method
-    """
-
-    def __init__(self, method, name=None):
-        self.method = method
-        self.name = name or method.__name__
-
-    def __get__(self, inst, cls):
-        if inst is None:
-            return self
-        result = self.method(inst)
-        setattr(inst, self.name, result)
-        return result
-
 
 class LastFM(object):
     url = "http://ws.audioscrobbler.com/2.0/"
@@ -46,9 +27,9 @@ class LastFM(object):
             "format": "json",
             "limit": "200",
         }
-        if os.path.isfile(self.target):
-            mtime = os.path.getmtime(self.target)
-            self.params.update({"from": mtime})
+        # if os.path.isfile(self.target):
+            # mtime = os.path.getmtime(self.target)
+            # self.params.update({"from": mtime})
 
     @property
     def target(self):
@@ -57,14 +38,15 @@ class LastFM(object):
     @cached_property
     def existing(self):
         timestamps = []
-        with open(self.target, "r") as f:
-            r = csv.reader(f)
-            for row in r:
-                try:
-                    timestamps.append(arrow.get(row[0]).timestamp)
-                except Exception as e:
-                    logging.error("arrow failed on row %s", row)
-                    continue
+        if os.path.isfile(self.target):
+            with open(self.target, "r") as f:
+                r = csv.reader(f)
+                for row in r:
+                    try:
+                        timestamps.append(arrow.get(row[0]).timestamp)
+                    except Exception as e:
+                        logging.error("arrow failed on row %s", row)
+                        continue
         return timestamps
 
     @property
@@ -98,8 +80,11 @@ class LastFM(object):
         return json.loads(r.text).get("recenttracks")
 
     def run(self):
-        startpage = floor(len(self.existing) / int(self.params.get("limit")))
-        self.params.update({"page": startpage})
+        if len(self.existing):
+            self.params.update({"from": sorted(self.existing)[-1]})
+        #startpage = max(1, floor(len(self.existing) / int(self.params.get("limit"))))
+        #startpage = 1
+        self.params.update({"page": 1})
         try:
             data = self.fetch()
             tracks = self.extracttracks(data)
