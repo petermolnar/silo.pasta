@@ -5,26 +5,17 @@ import LastFM
 import DeviantArt
 import Flickr
 #import Artstation
+import HackerNews
 from pprint import pprint
 
-lfm = LastFM.LastFM()
-lfm.run()
-
-#opml = common.Follows()
-
 silos = [
-    DeviantArt.DAFavs(),
-    Flickr.FlickrFavs(),
-    Tumblr.TumblrFavs(),
+#    DeviantArt.DAFavs(),
+#    Flickr.FlickrFavs(),
+#    Tumblr.TumblrFavs(),
 #    Artstation.ASFavs(),
+#    LastFM.LastFM(),
+    HackerNews.HackerNews()
 ]
 
 for silo in silos:
     silo.run()
-    #silo.sync_with_aperture()
-    #opml.update({silo.silo: silo.feeds})
-
-#opml.sync()
-#opml.export()
-opml = common.Aperture()
-opml.export()

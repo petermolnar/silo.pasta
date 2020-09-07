@@ -8,7 +8,7 @@ class nameddict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
-base = os.path.abspath(os.path.expanduser("~/Projects/petermolnar.net"))
+#base = os.path.abspath(os.path.expanduser("~/"))
 
 opml = nameddict({
     "owner": "Peter Molnar",
@@ -18,9 +18,10 @@ opml = nameddict({
 })
 
 paths = nameddict({
-    "archive": os.path.join(base, "archive"),
-    "content": os.path.join(base, "content"),
-    "bookmarks": os.path.join(base, "archive", "bookmarks")
+    "archive": os.path.join(os.path.expanduser('~'), "archive"),
+    #"archive": os.path.join(os.path.expanduser('~'), ""),
+    #"content": os.path.join(base, "content"),
+    #"bookmarks": os.path.join(base, "archive", "bookmarks")
 })
 
 loglevels = {"critical": 50, "error": 40, "warning": 30, "info": 20, "debug": 10}
