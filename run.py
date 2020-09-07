@@ -9,11 +9,11 @@ import HackerNews
 from pprint import pprint
 
 silos = [
-#    DeviantArt.DAFavs(),
-#    Flickr.FlickrFavs(),
-#    Tumblr.TumblrFavs(),
+    DeviantArt.DAFavs(),
+    Flickr.FlickrFavs(),
+    Tumblr.TumblrFavs(),
 #    Artstation.ASFavs(),
-#    LastFM.LastFM(),
+    LastFM.LastFM(),
     HackerNews.HackerNews()
 ]
 
