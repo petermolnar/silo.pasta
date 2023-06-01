@@ -8,7 +8,6 @@ import subprocess
 import json
 from io import BytesIO
 import lxml.etree as etree
-from slugify import slugify
 import requests
 from requests.auth import HTTPBasicAuth
 import arrow
@@ -17,6 +16,49 @@ import keys
 import yaml
 from pprint import pprint
 import feedparser
+
+# https://www.peterbe.com/plog/fastest-python-function-to-slugify-a-string
+NON_URL_SAFE = [
+    '"',
+    "#",
+    "$",
+    "%",
+    "&",
+    "+",
+    ",",
+    "/",
+    ":",
+    ";",
+    "=",
+    "?",
+    "@",
+    "[",
+    "]",
+    "^",
+    "`",
+    "{",
+    "|",
+    "}",
+    "~",
+    "'",
+    ".",
+    "\\",
+]
+# TRANSLATE_TABLE = {ord(char): "" for char in NON_URL_SAFE}
+RE_NON_URL_SAFE = re.compile(
+    r"[{}]".format("".join(re.escape(x) for x in NON_URL_SAFE))
+)
+RE_REMOVESCHEME = re.compile(r"^https?://(?:www)?")
+
+
+def slugify(text):
+    text = RE_REMOVESCHEME.sub("", text).strip()
+    text = RE_NON_URL_SAFE.sub("", text).strip()
+    text = text.lower()
+    text = "_".join(re.split(r"\s+", text))
+    return text
+
+
 
 TMPFEXT = ".xyz"
 MDFEXT = ".md"
@@ -42,9 +84,9 @@ def utfyamldump(data):
 
 def url2slug(url):
     return slugify(
-        re.sub(r"^https?://(?:www)?", "", url),
-        only_ascii=True,
-        lower=True,
+        re.sub(r"^https?://(?:www)?", "", url)
+        #only_ascii=True,
+        #lower=True,
     )[:200]
 
 

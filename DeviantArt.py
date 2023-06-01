@@ -133,7 +133,7 @@ class DAFav(common.ImgFav):
             "deviantart_%s_%s_%s"
             % (
                 common.url2slug("%s" % self.deviation.author),
-                self.id,
+                self.id.replace("-", "_"),
                 common.url2slug("%s" % self.title),
             ),
         )

@@ -9,7 +9,7 @@ class nameddict(dict):
     __delattr__ = dict.__delitem__
 
 paths = nameddict({
-    "archive": os.path.join(os.path.expanduser('~'), "archive"),
+    "archive": os.path.join(os.path.expanduser('~'), "archiv"),
 })
 
 loglevels = {"critical": 50, "error": 40, "warning": 30, "info": 20, "debug": 10}

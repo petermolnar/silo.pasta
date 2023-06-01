@@ -6,11 +6,13 @@ from operator import attrgetter
 from collections import namedtuple
 import requests
 import arrow
+from datetime import datetime
 import settings
 import keys
 from pprint import pprint
 from math import floor
 from common import cached_property
+import sys
 
 Track = namedtuple(
     "Track", ["timestamp", "artist", "album", "title", "artistid", "albumid", "img"]
@@ -43,9 +45,10 @@ class LastFM(object):
                 r = csv.reader(f)
                 for row in r:
                     try:
-                        timestamps.append(arrow.get(row[0]).timestamp)
+
+                        timestamps.append(int(datetime.fromisoformat(row[0]).timestamp()))
                     except Exception as e:
-                        logging.error("arrow failed on row %s", row)
+                        logging.error("arrow failed on row %s as: %s", row[0], e)
                         continue
         return timestamps
 
@@ -64,7 +67,7 @@ class LastFM(object):
             if ts.timestamp in self.existing:
                 continue
             entry = Track(
-                ts.format("YYYY-MM-DDTHH:mm:ssZ"),
+                ts.format("YYYY-MM-DDTHH:mm:ssZZ"),
                 track.get("artist").get("#text", ""),
                 track.get("album").get("#text", ""),
                 track.get("name", ""),
